@@ -67,6 +67,7 @@ pub mod Payment {
     pub mod Errors {
         pub const OWNER_ZERO: felt252 = 'Owner address zero';
         pub const NOT_OWNER: felt252 = 'Not the owner';
+        pub const BILLING_ID_EXISTS: felt252 = 'Billing ID already exists';
         pub const NOT_TOKEN_ADDRESS: felt252 = 'Not a token address';
         pub const ZERO_ADDRESS_CALLER: felt252 = 'Caller address zero';
         pub const ZERO_WALLET_ADDRESS: felt252 = 'Wallet address zero';
@@ -136,6 +137,10 @@ pub mod Payment {
         ) {
             assert(payment_token == self.payment_token.read(), Errors::NOT_TOKEN_ADDRESS);
             assert(payment_amount > 0, Errors::ZERO_PAY);
+
+            let existing_billing = self.billing.read(billing_id);
+            assert(existing_billing.billing_id == 0, Errors::BILLING_ID_EXISTS);
+
             let sender = get_contract_address();
             let payment_token_contract = IERC20Dispatcher { contract_address: payment_token };
             let timestamp = get_block_timestamp();
