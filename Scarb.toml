@@ -1,0 +1,19 @@
+[package]
+name = "avs_contract"
+version = "0.1.0"
+description = "AvantStark - The Open-Source Starknet Payment Processor"
+homepage = "https://avantstark.com"
+cairo-version = ">=2.7.0"
+
+# See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+allowed-libfuncs-list.name = "experimental"
+
+[dependencies]
+starknet = "2.7.0"
+
+[tool.snforge]
+# exit_first = true
