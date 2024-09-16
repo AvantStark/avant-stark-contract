@@ -33,7 +33,6 @@ trait IPayment<TContractState> {
 #[starknet::contract]
 pub mod Payment {
     use avs_contract::interfaces::erc20::{IERC20DispatcherTrait, IERC20Dispatcher};
-    // use avs_contract::components::owned::{IOwnable, Errors};
     use core::num::traits::Zero;
     use super::{Billing};
     use core::starknet::event::EventEmitter;
@@ -42,15 +41,23 @@ pub mod Payment {
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerWriteAccess,
         StoragePointerReadAccess
     };
+    use openzeppelin::access::ownable::OwnableComponent;
+
+    component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+
+    #[abi(embed_v0)]
+    impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
+    impl InternalImpl = OwnableComponent::InternalImpl<ContractState>;
 
     #[storage]
     struct Storage {
-        owner: ContractAddress,
         store_name: felt252,
         store_wallet_address: ContractAddress,
         payment_token: ContractAddress,
         billing: Map::<felt252, Billing>,
         total_paid: u256,
+        #[substorage(v0)]
+        ownable: OwnableComponent::Storage
     }
 
     #[event]
@@ -58,6 +65,8 @@ pub mod Payment {
     pub enum Event {
         BillingPaid: BillingPaid,
         BillingRefunded: BillingRefunded,
+        #[flat]
+        OwnableEvent: OwnableComponent::Event
     }
 
     #[derive(Drop, starknet::Event)]
@@ -103,7 +112,7 @@ pub mod Payment {
     ) {
         assert(Zero::is_non_zero(@store_wallet_address), Errors::OWNER_ZERO);
         assert(Zero::is_non_zero(@payment_token), Errors::ZERO_ADDRESS_TOKEN);
-        self.owner.write(get_caller_address());
+        self.ownable.initializer(get_caller_address());
         self.store_name.write(store_name);
         self.store_wallet_address.write(store_wallet_address);
         self.payment_token.write(payment_token);
@@ -133,22 +142,19 @@ pub mod Payment {
         }
 
         fn update_store_name(ref self: ContractState, store_name: felt252) {
-            let owner = self.owner.read();
-            assert(owner == get_caller_address(), Errors::NOT_OWNER);
+            self.ownable.assert_only_owner();
             self.store_name.write(store_name)
         }
 
         fn update_store_wallet_address(
             ref self: ContractState, store_wallet_address: ContractAddress
         ) {
-            let owner = self.owner.read();
-            assert(owner == get_caller_address(), Errors::NOT_OWNER);
+            self.ownable.assert_only_owner();
             self.store_wallet_address.write(store_wallet_address)
         }
 
         fn update_payment_token(ref self: ContractState, payment_token: ContractAddress) {
-            let owner = self.owner.read();
-            assert(owner == get_caller_address(), Errors::NOT_OWNER);
+            self.ownable.assert_only_owner();
             self.payment_token.write(payment_token);
         }
 
@@ -191,8 +197,7 @@ pub mod Payment {
         fn refund_billing(ref self: ContractState, billing_id: felt252) {
             let mut billing = self.billing.read((billing_id));
             assert(billing.status == STATUS_PAID, Errors::REFUND_NOT_ALLOWED);
-            let owner = self.owner.read();
-            assert(owner == get_caller_address(), Errors::NOT_OWNER);
+            self.ownable.assert_only_owner();
 
             let payment_token = billing.payment_token;
             let refund_amount = billing.amount;
