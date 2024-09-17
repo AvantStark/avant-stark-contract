@@ -1,1 +1,13 @@
 # avant-stark-contract
+
+## ClassHash
+
+```
+0x703cdd179b5c85e6690d5394ff221a965616357bb725747727e0a1967ca6733
+```
+
+## Contract Address
+
+```
+0x44676ef5eb73a60798855348361606b12579d5b5013986043700b4573bf354f
+```
