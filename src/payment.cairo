@@ -42,12 +42,20 @@ pub mod Payment {
         StoragePointerReadAccess
     };
     use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin::security::PausableComponent;
 
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
+    component!(path: PausableComponent, storage: pausable, event: PausableEvent);
 
+    // Ownable Mixin
     #[abi(embed_v0)]
     impl OwnableImpl = OwnableComponent::OwnableImpl<ContractState>;
     impl InternalImpl = OwnableComponent::InternalImpl<ContractState>;
+
+    // Pausable
+    #[abi(embed_v0)]
+    impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
+    impl PausableInternalImpl = PausableComponent::InternalImpl<ContractState>;
 
     #[storage]
     struct Storage {
@@ -57,7 +65,9 @@ pub mod Payment {
         billing: Map::<felt252, Billing>,
         total_paid: u256,
         #[substorage(v0)]
-        ownable: OwnableComponent::Storage
+        ownable: OwnableComponent::Storage,
+        #[substorage(v0)]
+        pausable: PausableComponent::Storage
     }
 
     #[event]
@@ -66,7 +76,9 @@ pub mod Payment {
         BillingPaid: BillingPaid,
         BillingRefunded: BillingRefunded,
         #[flat]
-        OwnableEvent: OwnableComponent::Event
+        OwnableEvent: OwnableComponent::Event,
+        #[flat]
+        PausableEvent: PausableComponent::Event
     }
 
     #[derive(Drop, starknet::Event)]
@@ -108,15 +120,28 @@ pub mod Payment {
         ref self: ContractState,
         store_name: felt252,
         store_wallet_address: ContractAddress,
+        owner: ContractAddress,
         payment_token: ContractAddress
     ) {
         assert(Zero::is_non_zero(@store_wallet_address), Errors::OWNER_ZERO);
         assert(Zero::is_non_zero(@payment_token), Errors::ZERO_ADDRESS_TOKEN);
-        self.ownable.initializer(get_caller_address());
+        self.ownable.initializer(owner);
         self.store_name.write(store_name);
         self.store_wallet_address.write(store_wallet_address);
         self.payment_token.write(payment_token);
         self.total_paid.write(0_u256);
+    }
+
+    #[external(v0)]
+    fn pause(ref self: ContractState) {
+        self.ownable.assert_only_owner();
+        self.pausable.pause();
+    }
+
+    #[external(v0)]
+    fn unpause(ref self: ContractState) {
+        self.ownable.assert_only_owner();
+        self.pausable.unpause();
     }
 
     #[abi(embed_v0)]
@@ -164,6 +189,7 @@ pub mod Payment {
             payment_token: ContractAddress,
             payment_amount: u256,
         ) {
+            self.pausable.assert_not_paused();
             assert(payment_token == self.payment_token.read(), Errors::NOT_TOKEN_ADDRESS);
             assert(payment_amount > 0, Errors::ZERO_PAY);
 
@@ -195,6 +221,7 @@ pub mod Payment {
         }
 
         fn refund_billing(ref self: ContractState, billing_id: felt252) {
+            self.pausable.assert_not_paused();
             let mut billing = self.billing.read((billing_id));
             assert(billing.status == STATUS_PAID, Errors::REFUND_NOT_ALLOWED);
             self.ownable.assert_only_owner();
